@@ -29,15 +29,36 @@ class Server:
         self.ip = ip
         self.username = username
         self.password = password
+        self.addr = f"{self.username}@{self.ip}"
 
-    def system(self, command):
+    def system(self, command, add_ssh=True):
         """
         Returns the exit code.
+
+        :param add_ssh: Whether to add ssh addr.
         """
-        args = ["sshpass", "-p", self.password, "ssh", f"{self.username}@{self.ip}", *command.split()]
+        args = ["sshpass", "-p", self.password]
+        if add_ssh:
+            args.append("ssh")
+            args.append(self.addr)
+        args.extend(command.split())
+
         proc = Popen(args, stdin=DEVNULL, stdout=PIPE, stderr=PIPE)
         proc.wait()
         return proc.returncode
+
+    def copy_blend(self, path):
+        """
+        Copies local blend file to server:/tmp/renderfarm.blend
+        """
+        return self.system(f"scp {path} {self.addr}:/tmp/renderfarm.blend", add_ssh=False)
+
+    def render(self, frame, output):
+        """
+        Render frame and save to local file output.
+        Assumes blend is already copied.
+        """
+        
 
 
 def main():
@@ -48,7 +69,8 @@ def main():
     for server in data["servers"]:
         servers.append(Server(server["ip"], server["username"], server["password"]))
 
-    print(servers[0].system("rm a"))
+    s = servers[0]
+    print(s.copy_blend("/home/patrick/a.blend"))
 
 
 main()
