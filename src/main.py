@@ -1,6 +1,8 @@
 import argparse
 
 import config
+import worker
+from server import Server
 
 
 def check_config():
@@ -29,15 +31,6 @@ def main():
 
     config.init()
 
-    if args.subparser == "client":
-        check_config()
-
-    if args.subparser == "worker":
-        check_config()
-
-    if args.subparser == "server":
-        check_config()
-
     if args.subparser == "config":
         entry = args.entry
         data = args.data
@@ -47,6 +40,20 @@ def main():
         curr = config.load()
         curr[entry] = data
         config.dump(curr)
+
+        return
+
+    check_config()
+
+    if args.subparser == "client":
+        pass
+
+    if args.subparser == "worker":
+        worker.start()
+
+    if args.subparser == "server":
+        server = Server()
+        server.start()
 
 
 if __name__ == "__main__":

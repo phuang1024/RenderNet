@@ -23,3 +23,6 @@ def dump(data):
 def load():
     with open(CONFIG_FILE, "r") as f:
         return json.load(f)
+
+def get(key):
+    return load()[key]
