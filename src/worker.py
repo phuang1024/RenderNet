@@ -1,12 +1,27 @@
-from socket import socket, AF_INET, SOCK_STREAM
+import os
+import random
+import time
 
 import config
 import conn
 
+_rand = random.randint(0, 1e9)
+TMPDIR = os.path.join("/tmp", f"renderfarm_worker_{_rand}")
+os.makedirs(TMPDIR, exist_ok=True)
+
 
 def start():
-    sock = socket(AF_INET, SOCK_STREAM)
-    sock.connect((config.get("server_ip"), config.get("server_port")))
+    try:
+        while True:
+            print("Requesting work.")
+            resp = conn.request({
+                "type": "worker",
+                "action": "request_work",
+                "accept": config.get("worker_accept"),
+            })
+            print(len(resp))
 
-    conn.send(sock, {"test": 1, "b": [1, 2, 3]})
-    print(conn.recv(sock))
+            break
+
+    except KeyboardInterrupt:
+        print("Stopping worker.")

@@ -7,6 +7,8 @@ import conn
 
 class Server:
     def __init__(self):
+        self.jobs = []
+
         self.server = socket(AF_INET, SOCK_STREAM)
         self.server.bind((config.get("server_ip"), config.get("server_port")))
 
@@ -21,5 +23,14 @@ class Server:
 
     def handle(self, sock, addr):
         print("Connection:", addr)
+
         data = conn.recv(sock)
-        conn.send(sock, data)
+        if "type" in data and "action" in data:
+            if data["type"] == "worker":
+                self.handle_worker(sock, data)
+        else:
+            conn.send(sock, "invalid")
+
+    def handle_worker(self, sock, data):
+        if data["action"] == "request_work":
+            conn.send(sock, " " * int(1e8), True)

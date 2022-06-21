@@ -5,13 +5,6 @@ import worker
 from server import Server
 
 
-def check_config():
-    data = config.load()
-    for entry in config.CONFIG_ENTRIES:
-        if entry not in data:
-            raise ValueError(f"Config entry {entry} not found. See renderfarm config --help")
-
-
 def main():
     parser = argparse.ArgumentParser(description="Local Blender render farm.")
     subps = parser.add_subparsers(title="subcommands", dest="subparser")
@@ -34,8 +27,11 @@ def main():
     if args.subparser == "config":
         entry = args.entry
         data = args.data
+
         if entry == "server_port":
             data = int(data)
+        elif entry == "worker_accept":
+            data = data.split(",")
 
         curr = config.load()
         curr[entry] = data
@@ -43,7 +39,7 @@ def main():
 
         return
 
-    check_config()
+    assert config.check(args.subparser)
 
     if args.subparser == "client":
         pass
