@@ -4,13 +4,11 @@ import time
 
 import config
 import conn
-
-_rand = random.randint(0, 1e9)
-TMPDIR = os.path.join("/tmp", f"renderfarm_worker_{_rand}")
-os.makedirs(TMPDIR, exist_ok=True)
+from utils import get_tmp
 
 
 def start():
+    tmpdir = get_tmp("worker")
     try:
         while True:
             print("Requesting work.")
@@ -19,9 +17,6 @@ def start():
                 "action": "request_work",
                 "accept": config.get("worker_accept"),
             })
-            print(len(resp))
-
-            break
 
     except KeyboardInterrupt:
         print("Stopping worker.")
