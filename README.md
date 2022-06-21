@@ -1,2 +1,3 @@
-# renderfarm
-Blender rendering service.
+# Renderfarm
+
+Blender render farm hosted locally.
