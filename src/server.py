@@ -1,6 +1,7 @@
 import os
 import random
 import time
+from base64 import b64encode
 from socket import socket, AF_INET, SOCK_STREAM
 from threading import Thread
 
@@ -88,6 +89,12 @@ class Server:
         """
         Background thread that cleans up.
         """
+        # TODO for testing
+        p = os.path.join(self.tmpdir, "123")
+        os.makedirs(p, exist_ok=True)
+        os.system(f"cp /tmp/default.blend {p}/blend.blend")
+        self._jobs[123] = Job(p, list(range(100)))
+
         while True:
             time.sleep(1)
 
@@ -127,3 +134,11 @@ class Server:
                     conn.send(sock, {"found": True, "id": k, "frame": frame})
                 else:
                     conn.send(sock, {"found": False})
+
+            elif data["action"] == "download":
+                job_id = data["id"]
+                if job_id in jobs:
+                    with open(jobs[job_id].blend_path(), "rb") as f:
+                        conn.send(sock, b64encode(f.read()).decode())
+                else:
+                    conn.send(sock, b"")
