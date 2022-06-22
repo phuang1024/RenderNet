@@ -1,4 +1,6 @@
 import os
+import random
+import time
 from socket import socket, AF_INET, SOCK_STREAM
 from threading import Thread
 
@@ -44,10 +46,29 @@ class Job:
         return self.next >= len(self.frames)
 
 
+class JobsLock:
+    """
+    Context manager that locks Server._jobs
+    """
+
+    def __init__(self, server):
+        self.server = server
+
+    def __enter__(self):
+        while self.server._jobs_lock:
+            time.sleep(0.001)
+        self.server._jobs_lock = True
+        return self.server._jobs
+
+    def __exit__(self, *args):
+        self.server._jobs_lock = False
+
+
 class Server:
     def __init__(self):
-        self.jobs = []
-        self.tmpdir = get_tmp()
+        self._jobs = {}
+        self._jobs_lock = False
+        self.tmpdir = get_tmp("server")
 
         self.server = socket(AF_INET, SOCK_STREAM)
         self.server.bind((config.get("server_ip"), config.get("server_port")))
@@ -55,11 +76,29 @@ class Server:
     def start(self):
         print("Starting server.")
 
+        Thread(target=self.clean).start()
+
         self.server.listen()
 
         while True:
             sock, addr = self.server.accept()
             Thread(target=self.handle, args=(sock, addr)).start()
+
+    def clean(self):
+        """
+        Background thread that cleans up.
+        """
+        while True:
+            time.sleep(1)
+
+            with JobsLock(self) as jobs:
+                # Clean done jobs.
+                to_remove = []
+                for key, job in jobs.items():
+                    if job.done:
+                        to_remove.append(key)
+                for key in to_remove:
+                    jobs.pop(key)
 
     def handle(self, sock, addr):
         print("Connection:", addr)
@@ -72,5 +111,19 @@ class Server:
             conn.send(sock, "invalid")
 
     def handle_worker(self, sock, data):
-        if data["action"] == "request_work":
-            pass
+        with JobsLock(self) as jobs:
+            if data["action"] == "request_work":
+                keys = list(jobs.keys())
+                random.shuffle(keys)
+    
+                found = False
+                for k in keys:
+                    if not jobs[k].done:
+                        found = True
+                        break
+    
+                if found:
+                    frame = jobs[k].next_job()
+                    conn.send(sock, {"found": True, "id": k, "frame": frame})
+                else:
+                    conn.send(sock, {"found": False})

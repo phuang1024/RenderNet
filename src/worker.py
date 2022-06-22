@@ -17,6 +17,12 @@ def start():
                 "action": "request_work",
                 "accept": config.get("worker_accept"),
             })
+            print(resp)
+
+            if resp["found"]:
+                time.sleep(1)  # TODO remove
+            else:
+                time.sleep(5)
 
     except KeyboardInterrupt:
         print("Stopping worker.")
