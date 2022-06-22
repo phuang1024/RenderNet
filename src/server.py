@@ -1,7 +1,7 @@
 import os
 import random
 import time
-from base64 import b64encode
+from base64 import b64decode, b64encode
 from socket import socket, AF_INET, SOCK_STREAM
 from threading import Thread
 
@@ -41,6 +41,10 @@ class Job:
         frame = self.frames[self.next]
         self.next += 1
         return frame
+
+    def save_frame(self, data, frame):
+        with open(self.frame_path(frame), "wb") as f:
+            f.write(data)
 
     @property
     def done(self):
@@ -90,10 +94,12 @@ class Server:
         Background thread that cleans up.
         """
         # TODO for testing
+        """
         p = os.path.join(self.tmpdir, "123")
         os.makedirs(p, exist_ok=True)
         os.system(f"cp /tmp/default.blend {p}/blend.blend")
         self._jobs[123] = Job(p, list(range(100)))
+        """
 
         while True:
             time.sleep(1)
@@ -141,4 +147,8 @@ class Server:
                     with open(jobs[job_id].blend_path(), "rb") as f:
                         conn.send(sock, b64encode(f.read()).decode())
                 else:
-                    conn.send(sock, b"")
+                    conn.send(sock, "")
+
+            elif data["action"] == "upload":
+                jobs[data["id"]].save_frame(b64decode(data["data"]), data["frame"])
+                conn.send(sock, "")

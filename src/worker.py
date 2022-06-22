@@ -3,7 +3,7 @@ import random
 import shutil
 import sys
 import time
-from base64 import b64decode
+from base64 import b64decode, b64encode
 from subprocess import Popen, DEVNULL, PIPE, STDOUT
 
 import config
@@ -54,11 +54,23 @@ def start():
             })
 
             if resp["found"]:
-                blend = ensure_blend(tmpdir, resp["id"])
-                print("Rendering: job={}, frame={}".format(resp["id"], resp["frame"]))
-                output = render(tmpdir, blend, resp["frame"])
-                print(output)
-                break
+                job_id = resp["id"]
+                frame = resp["frame"]
+
+                blend = ensure_blend(tmpdir, job_id)
+                print(f"Rendering: job={job_id}, frame={frame};   ", end="", flush=True)
+                output = render(tmpdir, blend, frame)
+                print("Uploading;   ", end="", flush=True)
+                with open(output, "rb") as f:
+                    conn.request({
+                        "type": "worker",
+                        "action": "upload",
+                        "id": job_id,
+                        "frame": frame,
+                        "data": b64encode(f.read()).decode(),
+                    })
+                print("Done")
+
             else:
                 time.sleep(5)
 
