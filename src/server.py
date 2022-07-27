@@ -93,8 +93,8 @@ class Server:
         """
         Background thread that cleans up.
         """
-        # TODO for testing
         """
+        # TODO for testing
         p = os.path.join(self.tmpdir, "123")
         os.makedirs(p, exist_ok=True)
         os.system(f"cp /tmp/default.blend {p}/blend.blend")
@@ -120,6 +120,8 @@ class Server:
         if "type" in data and "action" in data:
             if data["type"] == "worker":
                 self.handle_worker(sock, data)
+            elif data["type"] == "client":
+                self.handle_client(sock, data)
         else:
             conn.send(sock, "invalid")
 
@@ -152,3 +154,12 @@ class Server:
             elif data["action"] == "upload":
                 jobs[data["id"]].save_frame(b64decode(data["data"]), data["frame"])
                 conn.send(sock, "")
+
+    def handle_client(self, sock, data):
+        with JobsLock(self) as jobs:
+            if data["action"] == "status":
+                job_id = data["id"]
+                if job_id in jobs:
+                    conn.send(sock, {
+                        "found": True,
+                    })
