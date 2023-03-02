@@ -1,2 +1,3 @@
-# renderfarm
-Blender rendering service.
+# RenderFarm
+
+Render farm system for Blender.
