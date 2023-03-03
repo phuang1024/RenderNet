@@ -2,6 +2,7 @@ import argparse
 import json
 import os
 
+from client import run_client
 from server import Server
 from worker import run_worker
 
@@ -21,7 +22,14 @@ def create_config():
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("mode", choices=["server", "client", "worker", "config"], default="client")
+    subparsers = parser.add_subparsers(dest="mode", required=True)
+    subparsers.add_parser("server")
+    subparsers.add_parser("worker")
+    subparsers.add_parser("config")
+    client_parser = subparsers.add_parser("client")
+    client_parser.add_argument("blend", type=str)
+    client_parser.add_argument("outdir", type=str)
+    client_parser.add_argument("frames", type=str, help="Python slice format i.e. a:b:c,d:e, etc.")
     args = parser.parse_args()
 
     if not os.path.isfile(CONFIG_PATH) or args.mode == "config":
@@ -35,6 +43,8 @@ def main():
         server.start()
     elif args.mode == "worker":
         run_worker(config)
+    elif args.mode == "client":
+        run_client(config, args)
 
 
 if __name__ == "__main__":

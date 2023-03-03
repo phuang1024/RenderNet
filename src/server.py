@@ -7,7 +7,7 @@ from threading import Thread
 from conn import *
 
 TMP_DIR = Path("/tmp/RenderFarm/server")
-TMP_DIR.mkdir(exist_ok=True)
+TMP_DIR.mkdir(exist_ok=True, parents=True)
 
 
 class Server:
@@ -84,11 +84,15 @@ class DataManager:
             - frames.json
             - done.txt   # if present, means done.
             - lock.txt   # if present, thread is processing.
+            - renders/   # rendered images
+                - 0.jpg
+                ...
         ...
     """
 
     def __init__(self, root):
         self.root = root
+        self.root.mkdir(exist_ok=True)
 
     def create_job(self, blend: bytes, frames: list[int]):
         """
@@ -109,6 +113,8 @@ class DataManager:
                 "todo": list(frames),
             }
             json.dump(data, f, indent=4)
+
+        (path / "renders").mkdir()
 
         return job_id
 

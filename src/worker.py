@@ -4,7 +4,17 @@ from conn import request
 
 
 def attempt_render(config):
-    pass
+    """
+    Attempt to render a job.
+    :return: True if a job was rendered, False otherwise.
+    """
+    resp = request(config, {"method": "get_work"})
+    if resp["status"] != "ok":
+        return False
+
+    job_id = resp["job_id"]
+    frame = resp["frame"]
+    print(f"Got work: job_id={job_id}, frame={frame}")
 
 
 def run_worker(config):
