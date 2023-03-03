@@ -11,7 +11,26 @@ TMP_DIR.mkdir(exist_ok=True)
 
 
 class Server:
+    """
+    All responses contain "status=..."
+    If status == "ok", good request.
+    Else, bad.
+
+    Request methods:
+    - "ping":
+        - request: ()
+        - response: (status="ok")
+    - "get_work":
+        - request: ()
+        - response: (job_id=..., frame=...)
+    - "download_blend":
+        - request: (job_id=...)
+        - response: (data=...)
+    """
+
     def __init__(self, ip, port):
+        self.manager = DataManager(TMP_DIR / "jobs")
+
         self.sock = socket(AF_INET, SOCK_STREAM)
         self.sock.bind((ip, port))
 
@@ -35,9 +54,22 @@ class Server:
             return
         print(f"Request from {addr}; method={request['method']}")
 
-        match request["method"]:
-            case "ping":
-                send(conn, {"status": "ok"})
+        if request["method"] == "ping":
+            send(conn, {"status": "ok"})
+
+        elif request["method"] == "download_blend":
+            path = self.manager.root / request["job_id"] / "blend.blend"
+            if path.exists():
+                with path.open("rb") as f:
+                    response = {
+                        "status": "ok",
+                        "data": f.read(),
+                    }
+            else:
+                response = {
+                    "status": "not_found"
+                }
+            send(conn, response)
 
 
 class DataManager:

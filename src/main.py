@@ -3,6 +3,7 @@ import json
 import os
 
 from server import Server
+from worker import run_worker
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(ROOT, "config.json")
@@ -32,6 +33,8 @@ def main():
     if args.mode == "server":
         server = Server(config["ip"], config["port"])
         server.start()
+    elif args.mode == "worker":
+        run_worker(config)
 
 
 if __name__ == "__main__":
