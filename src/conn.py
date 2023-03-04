@@ -1,4 +1,5 @@
 import struct
+import time
 from socket import socket, AF_INET, SOCK_STREAM
 
 import bcon
@@ -10,8 +11,9 @@ def recv_len(conn, length):
     while len(data) < length:
         data += conn.recv(length - len(data))
         tries += 1
-        if tries > 1000:
+        if tries > 10000:
             raise Exception("recv() failed")
+        time.sleep(0.001)
 
     return data
 

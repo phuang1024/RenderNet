@@ -45,7 +45,7 @@ def attempt_render(config) -> bool:
     # Request work
     resp = make_request(config, {"method": "get_work"})
     if resp["status"] != "ok":
-        print("No work.")
+        #print("No work.")
         return False
     job_id = resp["job_id"]
     frame = resp["frame"]
