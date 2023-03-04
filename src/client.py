@@ -48,13 +48,13 @@ def download_results(config, args):
     all_frames = response["frames_requested"]
 
     # Check which frames we already have
-    pbar = tqdm(total=len(all_frames), desc="Waiting...")
     frames_done = set()
     for file in outdir.iterdir():
         if file.suffix == ".jpg":
             frames_done.add(int(file.stem))
-            pbar.update(1)
+    print(f"Already downloaded {len(frames_done)} frames.")
 
+    pbar = tqdm(total=len(all_frames) - len(frames_done), desc="Waiting...")
     delay = 0
     while True:
         time.sleep(delay)
