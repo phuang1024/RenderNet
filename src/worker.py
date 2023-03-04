@@ -7,16 +7,17 @@ from subprocess import run, DEVNULL
 from conn import make_request
 
 TMP_DIR = Path(f"/tmp/RenderFarmWorker{random.randint(0, 100000)}")
-TMP_DIR.mkdir(exist_ok=True, parents=True)
+(TMP_DIR / "blends").mkdir(exist_ok=True, parents=True)
+(TMP_DIR / "renders").mkdir(exist_ok=True, parents=True)
 
 BLENDER = shutil.which("blender")
 assert BLENDER is not None, "Blender not found."
 
 
 def ensure_blend(config, job_id):
-    path = TMP_DIR / f"{job_id}.blend"
+    path = TMP_DIR / "blends" / f"{job_id}.blend"
     if not path.exists():
-        print(f"Downloading blend of job {job_id}...")
+        print(f"  Downloading blend of job {job_id}...")
 
         resp = make_request(config, {"method": "download_blend", "job_id": job_id})
         if resp["status"] != "ok":
@@ -27,14 +28,13 @@ def ensure_blend(config, job_id):
     return path
 
 
-def run_blender_render(file, frame):
-    print(f"Rendering frame {frame}...")
-    out_path = TMP_DIR / "render"
-    proc = run([BLENDER, "-b", file, "-F", "JPEG", "-o", out_path, "-f", str(frame)],
+def run_blender_render(file, frames):
+    print(f"  Running blender on {len(frames)} frames...")
+    out_path = TMP_DIR / "renders" / "img"
+
+    proc = run([BLENDER, "-b", file, "-F", "JPEG", "-o", out_path, "-f", ",".join(map(str, frames))],
         stdout=DEVNULL, stderr=DEVNULL)
     assert proc.returncode == 0, "Blender failed to render."
-    out_path = TMP_DIR / f"render{frame:04d}.jpg"
-    return out_path
 
 
 def attempt_render(config) -> bool:
@@ -48,19 +48,21 @@ def attempt_render(config) -> bool:
         #print("No work.")
         return False
     job_id = resp["job_id"]
-    frame = resp["frame"]
-    print(f"Got work: job_id={job_id}, frame={frame}")
+    frames = resp["frames"]
+    print(f"Got work: job_id={job_id}, {len(frames)} frames.")
 
     # Render
     blend_path = ensure_blend(config, job_id)
-    out_path = run_blender_render(blend_path, frame)
+    run_blender_render(blend_path, frames)
 
     # Upload result
-    print("Uploading result...")
-    resp = make_request(config, {"method": "upload_render", "job_id": job_id, "frame": frame,
-                                 "data": out_path.read_bytes()})
+    print("  Uploading results...")
+    for frame in frames:
+        curr_path = TMP_DIR / "renders" / f"img{frame:04d}.jpg"
+        resp = make_request(config, {"method": "upload_render", "job_id": job_id, "frame": frame,
+                "data": curr_path.read_bytes()})
 
-    print("Done.")
+    print("  Done.")
     return True
 
 
@@ -74,6 +76,7 @@ def run_worker(config):
     print("Testing ping...")
     resp = make_request(config, {"method": "ping"})
     assert resp["status"] == "ok"
+    print("Waiting for work")
 
     delay = 0
     while True:

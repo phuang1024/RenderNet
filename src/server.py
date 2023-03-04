@@ -19,26 +19,26 @@ class Server:
 
     Request methods:
     - "ping":
-        - request: ()
-        - response: (status="ok")
+        - request: {}
+        - response: {status="ok"}
     - "download_blend":
-        - request: (job_id=...)
-        - response: (data=...)
+        - request: {job_id=...}
+        - response: {data=...}
     - "download_render":
-        - request: (job_id=..., frame=...)
-        - response: (data=...)
+        - request: {job_id=..., frame=...}
+        - response: {data=...}
     - "get_work":
-        - request: ()
-        - response: (job_id=..., frame=...)
+        - request: {}
+        - response: {job_id=..., frames=[...]}
     - "upload_render":
-        - request: (job_id=..., frame=..., data=...)
-        - response: (status="ok")
+        - request: {job_id=..., frame=..., data=...}
+        - response: {status="ok"}
     - "create_job":
-        - request: (blend=..., frames=...(list))
-        - response: (job_id=...)
+        - request: {blend=..., frames=[...]}
+        - response: {job_id=...}
     - "job_status":
-        - request: (job_id=...)
-        - response: (frames_done=...)
+        - request: {job_id=...}
+        - response: {frames_done=...}
     """
 
     def __init__(self, ip, port):
@@ -98,7 +98,7 @@ class Server:
             send(conn, response)
 
         elif request["method"] == "get_work":
-            job_id, frame = self.manager.get_work()
+            job_id, frames = self.manager.get_work()
             if job_id is None:
                 send(conn, {
                     "status": "no_work",
@@ -107,7 +107,7 @@ class Server:
                 send(conn, {
                     "status": "ok",
                     "job_id": job_id,
-                    "frame": frame,
+                    "frames": frames,
                 })
 
         elif request["method"] == "upload_render":
@@ -161,6 +161,9 @@ class DataManager:
         ...
     """
 
+    # Worker renders x frames per request.
+    chunk_size = 16
+
     def __init__(self, root):
         self.root = root
         self.root.mkdir(exist_ok=True)
@@ -209,13 +212,14 @@ class DataManager:
 
         # Update frames.json
         data = json.loads((path / "frames.json").read_text())
-        frame = data["todo"][0]
-        data["todo"].remove(frame)
-        data["pending"].append(frame)
+        frames = data["todo"][:self.chunk_size]
+        for frame in frames:
+            data["todo"].remove(frame)
+            data["pending"].append(frame)
         (path / "frames.json").write_text(json.dumps(data, indent=4))
 
         (path / "lock.txt").unlink()
-        return (job_id, frame)
+        return (job_id, frames)
 
     def save_render(self, job_id, frame, img_data):
         path = self.root / job_id
