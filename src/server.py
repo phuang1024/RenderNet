@@ -7,7 +7,7 @@ from threading import Thread
 
 from conn import *
 
-TMP_DIR = Path(f"/tmp/RenderFarm{random.randint(0, 100000)}/server")
+TMP_DIR = Path(f"/tmp/RenderFarmServer{random.randint(0, 100000)}")
 TMP_DIR.mkdir(exist_ok=True, parents=True)
 
 
@@ -30,6 +30,9 @@ class Server:
     - "get_work":
         - request: ()
         - response: (job_id=..., frame=...)
+    - "upload_render":
+        - request: (job_id=..., frame=..., data=...)
+        - response: (status="ok")
     - "create_job":
         - request: (blend=..., frames=...(list))
         - response: (job_id=...)
@@ -94,6 +97,23 @@ class Server:
                 }
             send(conn, response)
 
+        elif request["method"] == "get_work":
+            job_id, frame = self.manager.get_work()
+            if job_id is None:
+                send(conn, {
+                    "status": "no_work",
+                })
+            else:
+                send(conn, {
+                    "status": "ok",
+                    "job_id": job_id,
+                    "frame": frame,
+                })
+
+        elif request["method"] == "upload_render":
+            self.manager.save_render(request["job_id"], request["frame"], request["data"])
+            send(conn, {"status": "ok"})
+
         elif request["method"] == "create_job":
             job_id = self.manager.create_job(
                 request["blend"],
@@ -117,6 +137,10 @@ class Server:
                     "status": "not_found"
                 }
             send(conn, response)
+
+        else:
+            print(f"Invalid method from {addr}")
+            send(conn, {"status": "invalid_request"})
 
 
 class DataManager:
@@ -158,7 +182,7 @@ class DataManager:
             data = {
                 "done": [],
                 "pending": [],
-                "todo": list(frames),
+                "todo": sorted(list(frames)),
             }
             json.dump(data, f, indent=4)
 
@@ -172,22 +196,38 @@ class DataManager:
         :return: (job_id, frame)
         """
         curr_jobs = list(self.get_pending_jobs())
+        if not curr_jobs:
+            return None, None
+
         job_id = random.choice(curr_jobs)
         path = self.root / job_id
 
+        # Wait for lock
         while (path / "lock.txt").exists():
             time.sleep(0.01)
         (path / "lock.txt").touch()
 
-        with (path / "frames.json").open("r") as f:
-            data = json.load(f)
-        frame = random.choice(data["todo"])
+        # Update frames.json
+        data = json.loads((path / "frames.json").read_text())
+        frame = data["todo"][0]
         data["todo"].remove(frame)
         data["pending"].append(frame)
-        with (path / "frames.json").open("w") as f:
-            json.dump(data, f, indent=4)
+        (path / "frames.json").write_text(json.dumps(data, indent=4))
 
+        (path / "lock.txt").unlink()
         return (job_id, frame)
+
+    def save_render(self, job_id, frame, img_data):
+        path = self.root / job_id
+
+        # Update frames.json
+        data = json.loads((path / "frames.json").read_text())
+        data["pending"].remove(frame)
+        data["done"].append(frame)
+        (path / "frames.json").write_text(json.dumps(data, indent=4))
+
+        # Save image
+        (path / "renders" / f"{frame}.jpg").write_bytes(img_data)
 
     def get_unique_id(self):
         max_num = 0
@@ -204,4 +244,5 @@ class DataManager:
                     frames = json.load(f)
                 if len(frames["todo"]) == 0 and len(frames["pending"]) == 0:
                     (job / "done.txt").touch()
-                yield job.name
+                else:
+                    yield job.name

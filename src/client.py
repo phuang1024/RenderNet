@@ -56,3 +56,9 @@ def run_client(config, args):
                 frames_done.add(frame)
                 pbar.set_description(f"Got frame {frame}")
                 pbar.update(1)
+
+        if len(frames_done) == len(frames):
+            break
+
+    pbar.close()
+    print("Done.")

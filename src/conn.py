@@ -4,13 +4,7 @@ from socket import socket, AF_INET, SOCK_STREAM
 import bcon
 
 
-def send(conn, obj):
-    data = bcon.dumps(obj)
-    conn.send(struct.pack("<I", len(data)))
-    conn.send(data)
-
-def recv(conn):
-    length = struct.unpack("<I", conn.recv(4))[0]
+def recv_len(conn, length):
     data = b""
     tries = 0
     while len(data) < length:
@@ -19,7 +13,18 @@ def recv(conn):
         if tries > 1000:
             raise Exception("recv() failed")
 
+    return data
+
+def send(conn, obj):
+    data = bcon.dumps(obj)
+    conn.send(struct.pack("<I", len(data)))
+    conn.send(data)
+
+def recv(conn):
+    length = struct.unpack("<I", recv_len(conn, 4))[0]
+    data = recv_len(conn, length)
     return bcon.loads(data)
+
 
 def make_request(config, data):
     """
