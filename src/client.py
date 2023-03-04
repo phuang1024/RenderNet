@@ -47,6 +47,7 @@ def download_results(config, args):
     response = make_request(config, {"method": "job_status", "job_id": job_id})
     all_frames = response["frames_requested"]
 
+    # Check which frames we already have
     pbar = tqdm(total=len(all_frames), desc="Waiting...")
     frames_done = set()
     for file in outdir.iterdir():
@@ -54,13 +55,20 @@ def download_results(config, args):
             frames_done.add(int(file.stem))
             pbar.update(1)
 
+    delay = 0
     while True:
-        time.sleep(1)
+        time.sleep(delay)
         response = make_request(config, {"method": "job_status", "job_id": job_id})
         if response["status"] != "ok":
             continue
+
+        # Check if we got any new frames
+        did_something = False
         for frame in response["frames_done"]:
             if frame not in frames_done:
+                did_something = True
+
+                # Download the frame
                 response = make_request(config, {"method": "download_render", "job_id": job_id, "frame": frame})
                 if response["status"] == "ok":
                     (outdir / f"{frame}.jpg").write_bytes(response["data"])
@@ -74,6 +82,11 @@ def download_results(config, args):
 
         if len(frames_done) == len(all_frames):
             break
+
+        if did_something:
+            delay = 0
+        else:
+            delay = min(delay + 1, 10)
 
     pbar.close()
     print("Done.")
