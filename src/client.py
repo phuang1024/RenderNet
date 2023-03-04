@@ -1,4 +1,6 @@
+import time
 from pathlib import Path
+from tqdm import tqdm
 
 from conn import make_request
 
@@ -31,3 +33,26 @@ def run_client(config, args):
     print("Sending job to server.")
     response = make_request(config, {"method": "create_job", "blend": blend_path.read_bytes(), "frames": frames})
     assert response["status"] == "ok"
+    job_id = response["job_id"]
+    print(f"Job created: job_id={job_id}")
+
+    print("Waiting for job to finish.")
+    pbar = tqdm(total=len(frames), desc="Waiting...")
+    frames_done = set()
+    while True:
+        time.sleep(1)
+        response = make_request(config, {"method": "job_status", "job_id": job_id})
+        if response["status"] != "ok":
+            continue
+        for frame in response["frames_done"]:
+            if frame not in frames_done:
+                response = make_request(config, {"method": "download_render", "job_id": job_id, "frame": frame})
+                if response["status"] == "ok":
+                    (outdir / f"{frame}.jpg").write_bytes(response["data"])
+                else:
+                    print(f"Failed to download frame {frame}")
+                    continue
+
+                frames_done.add(frame)
+                pbar.set_description(f"Got frame {frame}")
+                pbar.update(1)

@@ -24,12 +24,18 @@ class Server:
     - "download_blend":
         - request: (job_id=...)
         - response: (data=...)
+    - "download_render":
+        - request: (job_id=..., frame=...)
+        - response: (data=...)
     - "get_work":
         - request: ()
         - response: (job_id=..., frame=...)
     - "create_job":
         - request: (blend=..., frames=...(list))
         - response: (job_id=...)
+    - "job_status":
+        - request: (job_id=...)
+        - response: (frames_done=...)
     """
 
     def __init__(self, ip, port):
@@ -65,11 +71,23 @@ class Server:
         elif request["method"] == "download_blend":
             path = self.manager.root / request["job_id"] / "blend.blend"
             if path.exists():
-                with path.open("rb") as f:
-                    response = {
-                        "status": "ok",
-                        "data": f.read(),
-                    }
+                response = {
+                    "status": "ok",
+                    "data": path.read_bytes(),
+                }
+            else:
+                response = {
+                    "status": "not_found"
+                }
+            send(conn, response)
+
+        elif request["method"] == "download_render":
+            path = self.manager.root / request["job_id"] / "renders" / f"{request['frame']}.jpg"
+            if path.exists():
+                response = {
+                    "status": "ok",
+                    "data": path.read_bytes(),
+                }
             else:
                 response = {
                     "status": "not_found"
@@ -85,6 +103,20 @@ class Server:
                 "status": "ok",
                 "job_id": job_id,
             })
+
+        elif request["method"] == "job_status":
+            path = self.manager.root / request["job_id"] / "frames.json"
+            if path.exists():
+                data = json.loads(path.read_text())
+                response = {
+                    "status": "ok",
+                    "frames_done": data["done"],
+                }
+            else:
+                response = {
+                    "status": "not_found"
+                }
+            send(conn, response)
 
 
 class DataManager:
