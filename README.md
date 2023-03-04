@@ -46,7 +46,7 @@ The program will print out a **Job ID**. Take note of it to download the results
 Enter frames in Python slice syntax; i.e. `start:stop:step` with inclusive start and exclusive step.
 
 - `1:10:2` means frames `(1, 3, 5, 7, 9)`
-- `1:10:2,12:15` means frames `(1, 3, ..., 9, 12, 13, 14, 15)`
+- `1:10:2,12:15` means frames `(1, 3, ..., 9, 12, 13, 14)`
 
 **Then, download the results.**
 
