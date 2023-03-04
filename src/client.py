@@ -1,5 +1,7 @@
 from pathlib import Path
 
+from conn import make_request
+
 
 def parse_frames(frames: str):
     for section in frames.split(","):
@@ -25,3 +27,7 @@ def run_client(config, args):
     print(f"- Output directory: {outdir}")
     print(f"- Frames: ")
     frames = list(parse_frames(args.frames))
+
+    print("Sending job to server.")
+    response = make_request(config, {"method": "create_job", "blend": blend_path.read_bytes(), "frames": frames})
+    assert response["status"] == "ok"

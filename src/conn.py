@@ -11,10 +11,17 @@ def send(conn, obj):
 
 def recv(conn):
     length = struct.unpack("<I", conn.recv(4))[0]
-    data = conn.recv(length)
+    data = b""
+    tries = 0
+    while len(data) < length:
+        data += conn.recv(length - len(data))
+        tries += 1
+        if tries > 1000:
+            raise Exception("recv() failed")
+
     return bcon.loads(data)
 
-def request(config, data):
+def make_request(config, data):
     """
     Create connection, request, response.
     """

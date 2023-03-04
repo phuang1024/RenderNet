@@ -1,6 +1,6 @@
 import time
 
-from conn import request
+from conn import make_request
 
 
 def attempt_render(config):
@@ -8,7 +8,7 @@ def attempt_render(config):
     Attempt to render a job.
     :return: True if a job was rendered, False otherwise.
     """
-    resp = request(config, {"method": "get_work"})
+    resp = make_request(config, {"method": "get_work"})
     if resp["status"] != "ok":
         return False
 
@@ -24,7 +24,7 @@ def run_worker(config):
     """
     print("Worker starting.")
     print("Testing ping...")
-    resp = request(config, {"method": "ping"})
+    resp = make_request(config, {"method": "ping"})
     assert resp["status"] == "ok"
 
     delay = 0

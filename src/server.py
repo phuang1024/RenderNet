@@ -1,4 +1,5 @@
 import json
+import random
 import time
 from pathlib import Path
 from socket import socket, AF_INET, SOCK_STREAM
@@ -6,7 +7,7 @@ from threading import Thread
 
 from conn import *
 
-TMP_DIR = Path("/tmp/RenderFarm/server")
+TMP_DIR = Path(f"/tmp/RenderFarm{random.randint(0, 100000)}/server")
 TMP_DIR.mkdir(exist_ok=True, parents=True)
 
 
@@ -20,12 +21,15 @@ class Server:
     - "ping":
         - request: ()
         - response: (status="ok")
-    - "get_work":
-        - request: ()
-        - response: (job_id=..., frame=...)
     - "download_blend":
         - request: (job_id=...)
         - response: (data=...)
+    - "get_work":
+        - request: ()
+        - response: (job_id=..., frame=...)
+    - "create_job":
+        - request: (blend=..., frames=...(list))
+        - response: (job_id=...)
     """
 
     def __init__(self, ip, port):
@@ -34,6 +38,7 @@ class Server:
         self.sock = socket(AF_INET, SOCK_STREAM)
         self.sock.bind((ip, port))
 
+        print(f"Temporary directory: {TMP_DIR}")
         print(f"Binding to {ip}:{port}")
 
     def start(self):
@@ -71,6 +76,16 @@ class Server:
                 }
             send(conn, response)
 
+        elif request["method"] == "create_job":
+            job_id = self.manager.create_job(
+                request["blend"],
+                request["frames"],
+            )
+            send(conn, {
+                "status": "ok",
+                "job_id": job_id,
+            })
+
 
 class DataManager:
     """
@@ -103,6 +118,7 @@ class DataManager:
         """
         job_id = self.get_unique_id()
         path = self.root / job_id
+        path.mkdir()
 
         with (path / "blend.blend").open("wb") as f:
             f.write(blend)
