@@ -41,7 +41,6 @@ This will start the worker indefinitely.
 python main.py create /path/to/blend.blend frames
 ```
 
-Create a new job and wait for it to finish.
 The program will print out a **Job ID**. Take note of it to download the results.
 
 Enter frames in Python slice syntax; i.e. `start:stop:step` with inclusive start and exclusive step.
