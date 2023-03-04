@@ -7,8 +7,6 @@ from client import create_job, download_results
 from server import Server
 from worker import run_worker
 
-interrupt.register()
-
 ROOT = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(ROOT, "config.json")
 
@@ -45,13 +43,16 @@ def main():
 
     if args.mode == "server":
         server = Server(config["ip"], config["port"])
+        interrupt.register(server)
         server.start()
-    elif args.mode == "worker":
-        run_worker(config)
-    elif args.mode == "create":
-        create_job(config, args)
-    elif args.mode == "download":
-        download_results(config, args)
+    else:
+        interrupt.register()
+        if args.mode == "worker":
+            run_worker(config)
+        elif args.mode == "create":
+            create_job(config, args)
+        elif args.mode == "download":
+            download_results(config, args)
 
 
 if __name__ == "__main__":

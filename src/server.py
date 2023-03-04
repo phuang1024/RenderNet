@@ -61,6 +61,12 @@ class Server:
             client, addr = self.sock.accept()
             Thread(target=self.handle_client, args=(client, addr)).start()
 
+    def stop(self):
+        """
+        Stops the server.
+        """
+        self.sock.close()
+
     def handle_client(self, conn, addr):
         request = recv(conn)
         if not isinstance(request, dict) or "method" not in request:
