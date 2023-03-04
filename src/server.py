@@ -38,7 +38,7 @@ class Server:
         - response: {job_id=...}
     - "job_status":
         - request: {job_id=...}
-        - response: {frames_done=...}
+        - response: {frames_done=..., frames_requested=...}
     """
 
     def __init__(self, ip, port):
@@ -128,9 +128,11 @@ class Server:
             path = self.manager.root / request["job_id"] / "frames.json"
             if path.exists():
                 data = json.loads(path.read_text())
+                all_frames = set(data["done"] + data["pending"] + data["todo"])
                 response = {
                     "status": "ok",
                     "frames_done": data["done"],
+                    "frames_requested": sorted(list(all_frames)),
                 }
             else:
                 response = {
@@ -236,7 +238,7 @@ class DataManager:
     def get_unique_id(self):
         max_num = 0
         for f in self.root.iterdir():
-            name = f.name.stem
+            name = f.stem
             if name.isdigit():
                 max_num = max(max_num, int(name)+1)
         return str(max_num)

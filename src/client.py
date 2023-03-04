@@ -19,14 +19,11 @@ def parse_frames(frames: str):
             yield from range(parts[0], parts[1], parts[2])
 
 
-def run_client(config, args):
+def create_job(config, args):
     blend_path = Path(args.blend)
-    outdir = Path(args.outdir)
-    outdir.mkdir(parents=True, exist_ok=True)
 
     print(f"Creating job:")
     print(f"- Blend: {blend_path}")
-    print(f"- Output directory: {outdir}")
     print(f"- Frames: ")
     frames = list(parse_frames(args.frames))
 
@@ -35,10 +32,28 @@ def run_client(config, args):
     assert response["status"] == "ok"
     job_id = response["job_id"]
     print(f"Job created: job_id={job_id}")
+    print(f"Run `python main.py download {job_id} /path/to/output` to download the results.")
 
-    print("Waiting for job to finish.")
-    pbar = tqdm(total=len(frames), desc="Waiting...")
+
+def download_results(config, args):
+    job_id = args.job_id
+    outdir = Path(args.outdir)
+    outdir.mkdir(parents=True, exist_ok=True)
+
+    print(f"Downloading results:")
+    print(f"- Job ID: {args.job_id}")
+    print(f"- Output directory: {outdir}")
+
+    response = make_request(config, {"method": "job_status", "job_id": job_id})
+    all_frames = response["frames_requested"]
+
+    pbar = tqdm(total=len(all_frames), desc="Waiting...")
     frames_done = set()
+    for file in outdir.iterdir():
+        if file.suffix == ".jpg":
+            frames_done.add(int(file.stem))
+            pbar.update(1)
+
     while True:
         time.sleep(1)
         response = make_request(config, {"method": "job_status", "job_id": job_id})
@@ -57,7 +72,7 @@ def run_client(config, args):
                 pbar.set_description(f"Got frame {frame}")
                 pbar.update(1)
 
-        if len(frames_done) == len(frames):
+        if len(frames_done) == len(all_frames):
             break
 
     pbar.close()

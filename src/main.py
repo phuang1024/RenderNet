@@ -2,7 +2,7 @@ import argparse
 import json
 import os
 
-from client import run_client
+from client import create_job, download_results
 from server import Server
 from worker import run_worker
 
@@ -26,10 +26,12 @@ def main():
     subparsers.add_parser("server")
     subparsers.add_parser("worker")
     subparsers.add_parser("config")
-    client_parser = subparsers.add_parser("client")
-    client_parser.add_argument("blend", type=str)
-    client_parser.add_argument("outdir", type=str)
-    client_parser.add_argument("frames", type=str, help="Python slice format i.e. a:b:c,d:e, etc.")
+    create_parser = subparsers.add_parser("create")
+    create_parser.add_argument("blend", type=str)
+    create_parser.add_argument("frames", type=str, help="Python slice format i.e. a:b:c,d:e, etc.")
+    download_parser = subparsers.add_parser("download")
+    download_parser.add_argument("job_id", type=str)
+    download_parser.add_argument("outdir", type=str)
     args = parser.parse_args()
 
     if not os.path.isfile(CONFIG_PATH) or args.mode == "config":
@@ -43,8 +45,10 @@ def main():
         server.start()
     elif args.mode == "worker":
         run_worker(config)
-    elif args.mode == "client":
-        run_client(config, args)
+    elif args.mode == "create":
+        create_job(config, args)
+    elif args.mode == "download":
+        download_results(config, args)
 
 
 if __name__ == "__main__":
