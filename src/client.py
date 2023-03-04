@@ -3,6 +3,7 @@ from pathlib import Path
 from tqdm import tqdm
 
 from conn import make_request
+from interrupt import interrupted
 
 
 def parse_frames(frames: str):
@@ -56,7 +57,7 @@ def download_results(config, args):
 
     pbar = tqdm(total=len(all_frames) - len(frames_done), desc="Waiting...")
     delay = 0
-    while True:
+    while not interrupted():
         time.sleep(delay)
         response = make_request(config, {"method": "job_status", "job_id": job_id})
         if response["status"] != "ok":

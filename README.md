@@ -35,14 +35,25 @@ This will start the worker indefinitely.
 
 ### Client
 
+**First, create a job.**
+
 ```bash
-python main.py client /path/to/blend.blend /path/to/save/renders/ frames
+python main.py create /path/to/blend.blend frames
 ```
 
 Create a new job and wait for it to finish.
-Currently, there is no way to resume waiting for a job if you close the terminal.
+The program will print out a **Job ID**. Take note of it to download the results.
 
 Enter frames in Python slice syntax; i.e. `start:stop:step` with inclusive start and exclusive step.
 
 - `1:10:2` means frames `(1, 3, 5, 7, 9)`
 - `1:10:2,12:15` means frames `(1, 3, ..., 9, 12, 13, 14, 15)`
+
+**Then, download the results.**
+
+```bash
+python main.py download job_id /path/to/save/
+```
+
+Enter the Job ID obtained from the previous command. You can start and stop this command any
+time, and it will resume downloading.

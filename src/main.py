@@ -2,9 +2,12 @@ import argparse
 import json
 import os
 
+import interrupt
 from client import create_job, download_results
 from server import Server
 from worker import run_worker
+
+interrupt.register()
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(ROOT, "config.json")
