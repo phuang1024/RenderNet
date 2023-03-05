@@ -1,4 +1,4 @@
-import json
+import pickle
 import random
 import time
 from pathlib import Path
@@ -131,10 +131,10 @@ class Server:
             })
 
         elif request["method"] == "job_status":
-            path = self.manager.root / request["job_id"] / "frames.json"
+            path = self.manager.root / request["job_id"] / "frames.pkl"
             if path.exists():
-                data = json.loads(path.read_text())
-                all_frames = set(data["done"] + data["pending"] + data["todo"])
+                data = pickle.loads(path.read_bytes())
+                all_frames = set(data["done"] + list(data["pending"].keys()) + data["todo"])
                 response = {
                     "status": "ok",
                     "frames_done": data["done"],
@@ -160,7 +160,7 @@ class DataManager:
         - 0   # (job0)
         - 1   # (job1)
             - blend.blend
-            - frames.json
+            - frames.pkl
             - done.txt   # if present, means done.
             - lock.txt   # if present, thread is processing.
             - renders/   # rendered images
@@ -187,15 +187,14 @@ class DataManager:
         path = self.root / job_id
         path.mkdir()
 
-        with (path / "blend.blend").open("wb") as f:
-            f.write(blend)
-        with (path / "frames.json").open("w") as f:
-            data = {
-                "done": [],
-                "pending": [],
-                "todo": sorted(list(frames)),
-            }
-            json.dump(data, f, indent=4)
+        # Save blend file and frames
+        (path / "blend.blend").write_bytes(blend)
+        data = {
+            "done": [],
+            "pending": {},   # {frame: time_start, ...}
+            "todo": sorted(list(frames)),
+        }
+        (path / "frames.pkl").write_bytes(pickle.dumps(data))
 
         (path / "renders").mkdir()
 
@@ -218,13 +217,13 @@ class DataManager:
             time.sleep(0.01)
         (path / "lock.txt").touch()
 
-        # Update frames.json
-        data = json.loads((path / "frames.json").read_text())
+        # Update frames
+        data = pickle.loads((path / "frames.pkl").read_bytes())
         frames = data["todo"][:self.chunk_size]
         for frame in frames:
             data["todo"].remove(frame)
-            data["pending"].append(frame)
-        (path / "frames.json").write_text(json.dumps(data, indent=4))
+            data["pending"][str(frame)] = time.time()
+        (path / "frames.pkl").write_bytes(pickle.dumps(data))
 
         (path / "lock.txt").unlink()
         return (job_id, frames)
@@ -232,11 +231,11 @@ class DataManager:
     def save_render(self, job_id, frame, img_data):
         path = self.root / job_id
 
-        # Update frames.json
-        data = json.loads((path / "frames.json").read_text())
-        data["pending"].remove(frame)
+        # Update frames
+        data = pickle.loads((path / "frames.pkl").read_bytes())
+        data["pending"].pop(str(frame))
         data["done"].append(frame)
-        (path / "frames.json").write_text(json.dumps(data, indent=4))
+        (path / "frames.pkl").write_bytes(pickle.dumps(data))
 
         # Save image
         (path / "renders" / f"{frame}.jpg").write_bytes(img_data)
@@ -251,10 +250,6 @@ class DataManager:
 
     def get_pending_jobs(self):
         for job in self.root.iterdir():
-            if not (job / "done.txt").exists():
-                with (job / "frames.json").open("r") as f:
-                    frames = json.load(f)
-                if len(frames["todo"]) == 0 and len(frames["pending"]) == 0:
-                    (job / "done.txt").touch()
-                else:
-                    yield job.name
+            frames = pickle.loads((job / "frames.pkl").read_bytes())
+            if len(frames["todo"]) > 0:
+                yield job.name
