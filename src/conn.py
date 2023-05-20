@@ -1,6 +1,7 @@
 import struct
 import time
 from socket import socket, AF_INET, SOCK_STREAM
+from typing import Any
 
 import bcon
 
@@ -28,7 +29,7 @@ def recv(conn):
     return bcon.loads(data)
 
 
-def make_request(config, data):
+def make_request(config, data) -> dict[str, Any]:
     """
     Create connection, request, response.
     """

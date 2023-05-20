@@ -1,5 +1,7 @@
 import random
 import shutil
+import tarfile
+import tempfile
 import time
 from pathlib import Path
 from subprocess import run, DEVNULL
@@ -16,25 +18,32 @@ assert BLENDER is not None, "Blender not found."
 
 
 def ensure_blend(config, job_id):
-    path = TMP_DIR / "blends" / f"{job_id}.blend"
+    path = TMP_DIR / "blends" / f"{job_id}"
     if not path.exists():
-        print(f"  Downloading blend of job {job_id}...")
+        print(f"  Downloading blend.tar.gz of job {job_id}...")
 
         resp = make_request(config, {"method": "download_blend", "job_id": job_id})
         if resp["status"] != "ok":
             raise Exception("Failed to download blend file.")
-        with path.open("wb") as f:
-            f.write(resp["data"])
 
-    return path
+        with tempfile.NamedTemporaryFile("wb") as tar:
+            tar.write(resp["data"])
+            with tarfile.open(tar.name) as tar:
+                tar.extract("main.blend", path)
+
+    return path / "main.blend"
 
 
 def run_blender_render(file, frames):
     print(f"  Running blender on {len(frames)} frames...")
     out_path = TMP_DIR / "renders" / "img"
 
-    proc = run([BLENDER, "-b", file, "-F", "JPEG", "-o", out_path, "-f", ",".join(map(str, frames))],
-        stdout=DEVNULL, stderr=DEVNULL)
+    proc = run(
+        [BLENDER, "-b", file, "-F", "JPEG", "-o", out_path, "-f", ",".join(map(str, frames))],
+        stdout=DEVNULL,
+        stderr=DEVNULL,
+        cwd=file.parent,
+    )
     assert proc.returncode == 0, "Blender failed to render."
 
 

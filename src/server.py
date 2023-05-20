@@ -1,5 +1,7 @@
 import pickle
 import random
+import tarfile
+import tempfile
 import time
 from pathlib import Path
 from socket import socket, AF_INET, SOCK_STREAM
@@ -78,7 +80,7 @@ class Server:
             send(conn, {"status": "ok"})
 
         elif request["method"] == "download_blend":
-            path = self.manager.root / request["job_id"] / "blend.blend"
+            path = self.manager.root / request["job_id"] / "blend.tar.gz"
             if path.exists():
                 response = {
                     "status": "ok",
@@ -157,9 +159,11 @@ class DataManager:
 
     File structure:
     - DataManager root
-        - 0   # (job0)
-        - 1   # (job1)
-            - blend.blend
+        - 0   # job 0
+        - 1   # job 1
+            - blend.tar.gz    # contains user's blend, textures, etc.
+                - main.blend  # blend file to render.
+                ...
             - frames.pkl
             - done.txt   # if present, means done.
             - lock.txt   # if present, thread is processing.
@@ -187,8 +191,13 @@ class DataManager:
         path = self.root / job_id
         path.mkdir()
 
-        # Save blend file and frames
-        (path / "blend.blend").write_bytes(blend)
+        # Save blend file
+        with tempfile.NamedTemporaryFile("wb") as f, tarfile.open(path / "blend.tar.gz", "w:gz") as tar:
+            f.write(blend)
+            f.flush()
+            tar.add(f.name, arcname="main.blend")
+
+        # Write frame data.
         data = {
             "done": [],
             "pending": {},   # {frame: time_start, ...}
@@ -196,6 +205,7 @@ class DataManager:
         }
         (path / "frames.pkl").write_bytes(pickle.dumps(data))
 
+        # Output renders directory.
         (path / "renders").mkdir()
 
         return job_id
