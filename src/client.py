@@ -1,3 +1,5 @@
+import tarfile
+import tempfile
 import time
 from pathlib import Path
 from tqdm import tqdm
@@ -22,15 +24,27 @@ def parse_frames(frames: str):
 
 def create_job(config, args):
     blend_path = Path(args.blend)
+    is_blend = blend_path.is_file() and blend_path.suffix == ".blend"
+    if not is_blend:
+        # Create tar archive.
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpfile = Path(tmpdir) / "blend.tar.gz"
+            with tarfile.open(tmpfile, "w:gz") as tar:
+                for f in blend_path.iterdir():
+                    tar.add(f, arcname=f.name)
+            blend_data = tmpfile.read_bytes()
+    else:
+        blend_data = blend_path.read_bytes()
 
     print(f"Creating job:")
-    print(f"- Blend: {blend_path}")
+    print(f"- Blend: {blend_path}, " + ("single file" if is_blend else "tar archive"))
     print(f"- Frames: ")
     frames = list(parse_frames(args.frames))
 
     print("Sending job to server.")
-    response = make_request(config, {"method": "create_job", "blend": blend_path.read_bytes(), "frames": frames})
+    response = make_request(config, {"method": "create_job", "blend": blend_data, "frames": frames, "is_tar": not is_blend})
     assert response["status"] == "ok"
+
     job_id = response["job_id"]
     print(f"Job created: job_id={job_id}")
     print(f"Run `python main.py download {job_id} /path/to/output` to download the results.")

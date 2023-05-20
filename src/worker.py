@@ -29,7 +29,7 @@ def ensure_blend(config, job_id):
         with tempfile.NamedTemporaryFile("wb") as tar:
             tar.write(resp["data"])
             with tarfile.open(tar.name) as tar:
-                tar.extract("main.blend", path)
+                tar.extractall(path)
 
     return path / "main.blend"
 

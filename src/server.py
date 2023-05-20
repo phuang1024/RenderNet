@@ -36,7 +36,8 @@ class Server:
         - request: {job_id=..., frame=..., data=...}
         - response: {status="ok"}
     - "create_job":
-        - request: {blend=..., frames=[...]}
+        - request: {blend=..., frames=[...], is_tar=...,}
+            - is_tar: True if uploaded a tar archive; false if a single blend file.
         - response: {job_id=...}
     - "job_status":
         - request: {job_id=...}
@@ -126,6 +127,7 @@ class Server:
             job_id = self.manager.create_job(
                 request["blend"],
                 request["frames"],
+                request["is_tar"],
             )
             send(conn, {
                 "status": "ok",
@@ -180,7 +182,7 @@ class DataManager:
         self.root = root
         self.root.mkdir(exist_ok=True)
 
-    def create_job(self, blend: bytes, frames: list[int]):
+    def create_job(self, blend: bytes, frames: list[int], is_tar: bool):
         """
         Creates new render job.
         :param blend: Bytes data of blend file.
@@ -192,10 +194,13 @@ class DataManager:
         path.mkdir()
 
         # Save blend file
-        with tempfile.NamedTemporaryFile("wb") as f, tarfile.open(path / "blend.tar.gz", "w:gz") as tar:
-            f.write(blend)
-            f.flush()
-            tar.add(f.name, arcname="main.blend")
+        if is_tar:
+            (path / "blend.tar.gz").write_bytes(blend)
+        else:
+            with tempfile.NamedTemporaryFile("wb") as f, tarfile.open(path / "blend.tar.gz", "w:gz") as tar:
+                f.write(blend)
+                f.flush()
+                tar.add(f.name, arcname="main.blend")
 
         # Write frame data.
         data = {
