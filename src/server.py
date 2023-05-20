@@ -249,7 +249,15 @@ class DataManager:
         return str(max_num)
 
     def get_pending_jobs(self):
-        for job in self.root.iterdir():
-            frames = pickle.loads((job / "frames.pkl").read_bytes())
-            if len(frames["todo"]) > 0:
-                yield job.name
+        """
+        Job IDs that have frames available to give to workers.
+        """
+        for jobdir in self.root.iterdir():
+            done_txt = (jobdir / "done.txt")
+            if not done_txt.exists():
+                frames = pickle.loads((jobdir / "frames.pkl").read_bytes())
+                if len(frames["todo"]) > 0:
+                    yield jobdir.name
+                else:
+                    # Mark as done, won't check next time.
+                    (jobdir / "done.txt").touch()
