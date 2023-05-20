@@ -1,3 +1,4 @@
+import sys
 import tarfile
 import tempfile
 import time
@@ -27,6 +28,13 @@ def create_job(config, args):
     is_blend = blend_path.is_file() and blend_path.suffix == ".blend"
     if not is_blend:
         # Create tar archive.
+        print("Directory given; creating tar archive.")
+
+        # Ensure `main.blend` exists.
+        if not (blend_path / "main.blend").exists():
+            print("main.blend not found in directory.")
+            sys.exit(1)
+
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpfile = Path(tmpdir) / "blend.tar.gz"
             with tarfile.open(tmpfile, "w:gz") as tar:

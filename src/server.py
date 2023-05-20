@@ -139,10 +139,11 @@ class Server:
             if path.exists():
                 data = pickle.loads(path.read_bytes())
                 all_frames = set(data["done"] + list(data["pending"].keys()) + data["todo"])
+                all_frames = sorted(list(map(int, all_frames)))
                 response = {
                     "status": "ok",
                     "frames_done": data["done"],
-                    "frames_requested": sorted(list(all_frames)),
+                    "frames_requested": all_frames,
                 }
             else:
                 response = {
