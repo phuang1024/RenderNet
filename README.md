@@ -2,6 +2,17 @@
 
 Render farm system for Blender.
 
+## Installation
+
+```bash
+git clone https://github.com/phuang1024/RenderNet
+cd RenderNet
+python setup.py bdist_wheel sdist
+pip install dist/*.whl
+
+brn
+```
+
 ## Usage
 
 This render farm program has 3 user types:
@@ -20,7 +31,7 @@ On the first usage, the program will request config information. You can edit it
 ### Server
 
 ```bash
-python main.py server
+brn server
 ```
 
 This will start the server indefinitely.
@@ -28,7 +39,7 @@ This will start the server indefinitely.
 ### Worker
 
 ```bash
-python main.py worker
+brn worker
 ```
 
 This will start the worker indefinitely.
@@ -38,7 +49,7 @@ This will start the worker indefinitely.
 **First, create a job.**
 
 ```bash
-python main.py create /path/to/blend.blend frames
+brn create /path/to/blend.blend frames
 ```
 
 The program will print out a **Job ID**. Take note of it to download the results.
@@ -51,7 +62,7 @@ Enter frames in Python slice syntax; i.e. `start:stop:step` with inclusive start
 **Then, download the results.**
 
 ```bash
-python main.py download job_id /path/to/save/
+brn download job_id /path/to/save/
 ```
 
 Enter the Job ID obtained from the previous command. You can start and stop this command any
