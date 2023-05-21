@@ -52,6 +52,8 @@ def attempt_render(config, worker_id) -> bool:
     Attempt to render a job.
     :return: True if a job was rendered, False otherwise.
     """
+    time_start = time.time()
+
     # Request work
     resp = make_request(config, {"method": "get_work", "worker_id": worker_id})
     if resp["status"] != "ok":
@@ -71,6 +73,10 @@ def attempt_render(config, worker_id) -> bool:
         curr_path = TMP_DIR / "renders" / f"img{frame:04d}.jpg"
         resp = make_request(config, {"method": "upload_render", "job_id": job_id, "frame": frame,
                 "data": curr_path.read_bytes(), "worker_id": worker_id})
+
+    time_elapse = time.time() - time_start
+    sec_per_frame = time_elapse / len(frames)
+    print(f"  Rendered {len(frames)} frames in {time_elapse:.2f} seconds ({sec_per_frame:.2f} sec/frame).")
 
     print("  Done.")
     return True

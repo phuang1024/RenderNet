@@ -60,7 +60,7 @@ class DataManager:
                 - "speed": Map of worker ID to speed (sec / frame). Stored as `VarStat` object.
                 - "batch_size": Map of worker ID to batch_size. With each batch, this is changed
                     to make work time closer to `max_batch_time`.
-            - done.txt   # if present, means done.
+            - done.txt   # if present, means no more "todo" frames.
             - lock.txt   # if present, some thread is processing.
             - renders/   # rendered images
                 - 0.jpg
@@ -72,6 +72,7 @@ class DataManager:
     # Smaller = less waiting on slower workers at the end.
     # Larger = less relative overhead.
     max_batch_time = 20
+    max_batch_size = 100
 
     def __init__(self, root):
         self.root = root
@@ -148,17 +149,32 @@ class DataManager:
 
         return (job_id, frames)
 
-    def save_render(self, job_id, frame, img_data):
+    def save_render(self, worker_id, job_id, frame, img_data):
         job_path = self.root / job_id
 
-        # Update frames
-        data = pickle.loads((job_path / "status.pkl").read_bytes())
-        data["pending"].pop(frame)
-        data["done"].append(frame)
-        (job_path / "status.pkl").write_bytes(pickle.dumps(data))
+        with self.lock(job_id):
+            status = pickle.loads((job_path / "status.pkl").read_bytes())
 
-        # Save image
-        (job_path / "renders" / f"{frame}.jpg").write_bytes(img_data)
+            # Update speed
+            elapse = time.time() - status["pending"][frame]
+            status["speed"][worker_id].add(elapse / status["batch_size"][worker_id])
+
+            # Update batch size
+            avg_time = status["speed"][worker_id].average()
+            nominal_bs = self.max_batch_time / avg_time
+            diff = nominal_bs - status["batch_size"][worker_id]
+            new_bs = status["batch_size"][worker_id] + diff*0.5
+            new_bs = max(1, min(self.max_batch_size, int(new_bs)))
+            status["batch_size"][worker_id] = new_bs
+
+            # Update frames
+            status["pending"].pop(frame)
+            status["done"].append(frame)
+
+            # Save image
+            (job_path / "renders" / f"{frame}.jpg").write_bytes(img_data)
+
+            (job_path / "status.pkl").write_bytes(pickle.dumps(status))
 
     def get_unique_id(self):
         max_num = 0

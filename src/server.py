@@ -123,7 +123,7 @@ class Server:
                 })
 
         elif request["method"] == "upload_render":
-            self.manager.save_render(request["job_id"], request["frame"], request["data"])
+            self.manager.save_render(request["worker_id"], request["job_id"], request["frame"], request["data"])
             send(conn, {"status": "ok"})
 
         elif request["method"] == "create_job":
