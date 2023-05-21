@@ -3,6 +3,7 @@ import random
 import tarfile
 import tempfile
 import time
+from pathlib import Path
 
 
 class VarStat:
@@ -20,6 +21,24 @@ class VarStat:
 
     def average(self):
         return self.sum / self.count
+
+
+class FileLock:
+    """
+    If file is present, means something is locked.
+    Wait until file is deleted, then re-create it and continue.
+    """
+
+    def __init__(self, path):
+        self.path = Path(path)
+
+    def __enter__(self):
+        while self.path.exists():
+            time.sleep(0.01)
+        self.path.touch()
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.path.unlink()
 
 
 class DataManager:
@@ -58,6 +77,12 @@ class DataManager:
         self.root = root
         self.root.mkdir(exist_ok=True)
 
+    def lock(self, job_id):
+        """
+        Return FileLock object for job_id.
+        """
+        return FileLock(self.root / job_id / "lock.txt")
+
     def create_job(self, blend: bytes, frames: list[int], is_tar: bool):
         """
         Creates new render job.
@@ -66,14 +91,14 @@ class DataManager:
         :return: Job ID (string)
         """
         job_id = self.get_unique_id()
-        path = self.root / job_id
-        path.mkdir()
+        job_path = self.root / job_id
+        job_path.mkdir()
 
         # Save blend file
         if is_tar:
-            (path / "blend.tar.gz").write_bytes(blend)
+            (job_path / "blend.tar.gz").write_bytes(blend)
         else:
-            with tempfile.NamedTemporaryFile("wb") as f, tarfile.open(path / "blend.tar.gz", "w:gz") as tar:
+            with tempfile.NamedTemporaryFile("wb") as f, tarfile.open(job_path / "blend.tar.gz", "w:gz") as tar:
                 f.write(blend)
                 f.flush()
                 tar.add(f.name, arcname="main.blend")
@@ -86,10 +111,10 @@ class DataManager:
             "speed": {},
             "batch_size": {},
         }
-        (path / "status.pkl").write_bytes(pickle.dumps(data))
+        (job_path / "status.pkl").write_bytes(pickle.dumps(data))
 
         # Output renders directory.
-        (path / "renders").mkdir()
+        (job_path / "renders").mkdir()
 
         return job_id
 
@@ -103,35 +128,30 @@ class DataManager:
             return None, None
 
         job_id = random.choice(curr_jobs)
-        path = self.root / job_id
+        job_path = self.root / job_id
 
-        # Wait for lock
-        while (path / "lock.txt").exists():
-            time.sleep(0.01)
-        (path / "lock.txt").touch()
+        with self.lock(job_id):
+            # Update frames
+            data = pickle.loads((job_path / "status.pkl").read_bytes())
+            frames = data["todo"][:self.chunk_size]
+            for frame in frames:
+                data["todo"].remove(frame)
+                data["pending"][frame] = time.time()
+            (job_path / "status.pkl").write_bytes(pickle.dumps(data))
 
-        # Update frames
-        data = pickle.loads((path / "status.pkl").read_bytes())
-        frames = data["todo"][:self.chunk_size]
-        for frame in frames:
-            data["todo"].remove(frame)
-            data["pending"][frame] = time.time()
-        (path / "status.pkl").write_bytes(pickle.dumps(data))
-
-        (path / "lock.txt").unlink()
         return (job_id, frames)
 
     def save_render(self, job_id, frame, img_data):
-        path = self.root / job_id
+        job_path = self.root / job_id
 
         # Update frames
-        data = pickle.loads((path / "status.pkl").read_bytes())
+        data = pickle.loads((job_path / "status.pkl").read_bytes())
         data["pending"].pop(frame)
         data["done"].append(frame)
-        (path / "status.pkl").write_bytes(pickle.dumps(data))
+        (job_path / "status.pkl").write_bytes(pickle.dumps(data))
 
         # Save image
-        (path / "renders" / f"{frame}.jpg").write_bytes(img_data)
+        (job_path / "renders" / f"{frame}.jpg").write_bytes(img_data)
 
     def get_unique_id(self):
         max_num = 0
