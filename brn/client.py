@@ -5,8 +5,8 @@ import time
 from pathlib import Path
 from tqdm import tqdm
 
-from conn import make_request
-from interrupt import interrupted
+from .conn import make_request
+from .interrupt import interrupted
 
 
 def parse_frames(frames: str):

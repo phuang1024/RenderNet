@@ -4,8 +4,8 @@ from pathlib import Path
 from socket import socket, AF_INET, SOCK_STREAM
 from threading import Thread
 
-from conn import *
-from datamgr import DataManager
+from .conn import *
+from .datamgr import DataManager
 
 TMP_DIR = Path(f"/tmp/RenderFarmServer{random.randint(0, 100000)}")
 TMP_DIR.mkdir(exist_ok=True, parents=True)

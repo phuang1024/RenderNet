@@ -1,4 +1,4 @@
-# RenderFarm
+# RenderNet
 
 Render farm system for Blender.
 

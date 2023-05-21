@@ -6,8 +6,8 @@ import time
 from pathlib import Path
 from subprocess import run, DEVNULL
 
-from conn import make_request
-from interrupt import interrupted
+from .conn import make_request
+from .interrupt import interrupted
 
 TMP_DIR = Path(f"/tmp/RenderFarmWorker{random.randint(0, 100000)}")
 (TMP_DIR / "blends").mkdir(exist_ok=True, parents=True)
