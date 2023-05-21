@@ -32,6 +32,7 @@ class DataManager:
     File structure:
     - DataManager root
         - 0   # job 0
+            ...
         - 1   # job 1
             - blend.tar.gz    # contains user's blend, textures, etc.
                 - main.blend  # blend file to render.
@@ -42,6 +43,8 @@ class DataManager:
                 - "todo": List of frames not started.
                 - "batch_size": Map of worker ID to batch_size. With each batch, this is changed
                     to make work time closer to `tgt_batch_time`.
+                - "last_batch_update": Map of ID to last time batch_size was updated. Prevent
+                    changing batch_size too often.
             - done.txt   # if present, means no more "todo" frames.
             - lock.txt   # if present, some thread is processing.
             - renders/   # rendered images
@@ -77,26 +80,28 @@ class DataManager:
         job_path = self.root / job_id
         job_path.mkdir()
 
-        # Save blend file
-        if is_tar:
-            (job_path / "blend.tar.gz").write_bytes(blend)
-        else:
-            with tempfile.NamedTemporaryFile("wb") as f, tarfile.open(job_path / "blend.tar.gz", "w:gz") as tar:
-                f.write(blend)
-                f.flush()
-                tar.add(f.name, arcname="main.blend")
+        with self.lock(job_id):
+            # Save blend file
+            if is_tar:
+                (job_path / "blend.tar.gz").write_bytes(blend)
+            else:
+                with tempfile.NamedTemporaryFile("wb") as f, tarfile.open(job_path / "blend.tar.gz", "w:gz") as tar:
+                    f.write(blend)
+                    f.flush()
+                    tar.add(f.name, arcname="main.blend")
 
-        # Write frame data.
-        data = {
-            "done": [],
-            "pending": {},   # {frame: time_start, ...}
-            "todo": sorted(list(frames)),
-            "batch_size": {},
-        }
-        (job_path / "status.pkl").write_bytes(pickle.dumps(data))
+            # Write frame data.
+            data = {
+                "done": [],
+                "pending": {},   # {frame: time_start, ...}
+                "todo": sorted(list(frames)),
+                "batch_size": {},
+                "last_batch_update": {}
+            }
+            (job_path / "status.pkl").write_bytes(pickle.dumps(data))
 
-        # Output renders directory.
-        (job_path / "renders").mkdir()
+            # Output renders directory.
+            (job_path / "renders").mkdir()
 
         return job_id
 
@@ -118,6 +123,7 @@ class DataManager:
             if worker_id not in status["batch_size"]:
                 # Initialize worker batch_size
                 status["batch_size"][worker_id] = 1
+                status["last_batch_update"][worker_id] = time.time()
 
             # Update frames
             frames = status["todo"][:int(status["batch_size"][worker_id])]
@@ -135,12 +141,16 @@ class DataManager:
         with self.lock(job_id):
             status = pickle.loads((job_path / "status.pkl").read_bytes())
 
-            avg_time = (time.time() - status["pending"][frame]) / status["batch_size"][worker_id]
-            nominal_bs = self.tgt_batch_time / avg_time
-            diff = nominal_bs - status["batch_size"][worker_id]
-            new_bs = status["batch_size"][worker_id] + diff*0.5
-            new_bs = max(1, min(self.max_batch_size, new_bs))
-            status["batch_size"][worker_id] = new_bs
+            time_since_update = time.time() - status["last_batch_update"][worker_id]
+            if time_since_update > 10:
+                avg_time = (time.time() - status["pending"][frame]) / status["batch_size"][worker_id]
+                nominal_bs = self.tgt_batch_time / avg_time
+                diff = nominal_bs - status["batch_size"][worker_id]
+                new_bs = status["batch_size"][worker_id] + diff*0.5
+                new_bs = max(1, min(self.max_batch_size, new_bs))
+                status["batch_size"][worker_id] = new_bs
+
+                status["last_batch_update"][worker_id] = time.time()
 
             # Update frames
             status["pending"].pop(frame)
