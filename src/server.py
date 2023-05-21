@@ -138,8 +138,7 @@ class Server:
             path = self.manager.root / request["job_id"] / "frames.pkl"
             if path.exists():
                 data = pickle.loads(path.read_bytes())
-                all_frames = set(data["done"] + list(data["pending"].keys()) + data["todo"])
-                all_frames = sorted(list(map(int, all_frames)))
+                all_frames = sorted(set(data["done"] + list(data["pending"].keys()) + data["todo"]))
                 response = {
                     "status": "ok",
                     "frames_done": data["done"],
@@ -177,7 +176,7 @@ class DataManager:
     """
 
     # Worker renders x frames per request.
-    chunk_size = 16
+    chunk_size = 8
 
     def __init__(self, root):
         self.root = root
@@ -238,7 +237,7 @@ class DataManager:
         frames = data["todo"][:self.chunk_size]
         for frame in frames:
             data["todo"].remove(frame)
-            data["pending"][str(frame)] = time.time()
+            data["pending"][frame] = time.time()
         (path / "frames.pkl").write_bytes(pickle.dumps(data))
 
         (path / "lock.txt").unlink()
@@ -249,7 +248,7 @@ class DataManager:
 
         # Update frames
         data = pickle.loads((path / "frames.pkl").read_bytes())
-        data["pending"].pop(str(frame))
+        data["pending"].pop(frame)
         data["done"].append(frame)
         (path / "frames.pkl").write_bytes(pickle.dumps(data))
 
