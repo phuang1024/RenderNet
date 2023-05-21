@@ -18,9 +18,9 @@ class Server:
     Else, bad.
 
     Request methods:
-    - "ping":
+    - "worker_init":
         - request: {}
-        - response: {status="ok"}
+        - response: {worker_id=...}
     - "download_blend":
         - request: {job_id=...}
         - response: {data=...}
@@ -28,10 +28,10 @@ class Server:
         - request: {job_id=..., frame=...}
         - response: {data=...}
     - "get_work":
-        - request: {}
+        - request: {worker_id=...}
         - response: {job_id=..., frames=[...]}
     - "upload_render":
-        - request: {job_id=..., frame=..., data=...}
+        - request: {worker_id=..., job_id=..., frame=..., data=...}
         - response: {status="ok"}
     - "create_job":
         - request: {blend=..., frames=[...], is_tar=...,}
@@ -43,6 +43,8 @@ class Server:
     """
 
     def __init__(self, ip, port):
+        self.worker_ids = set()
+
         self.manager = DataManager(TMP_DIR / "jobs")
 
         self.sock = socket(AF_INET, SOCK_STREAM)
@@ -75,8 +77,11 @@ class Server:
             return
         print(f"Request from {addr}; method={request['method']}")
 
-        if request["method"] == "ping":
-            send(conn, {"status": "ok"})
+        if request["method"] == "worker_init":
+            while (worker_id := random.randint(0, 100000)) in self.worker_ids:
+                pass
+            send(conn, {"worker_id": worker_id})
+            self.worker_ids.add(worker_id)
 
         elif request["method"] == "download_blend":
             path = self.manager.root / request["job_id"] / "blend.tar.gz"
@@ -105,7 +110,7 @@ class Server:
             send(conn, response)
 
         elif request["method"] == "get_work":
-            job_id, frames = self.manager.get_work()
+            job_id, frames = self.manager.get_work(request["worker_id"])
             if job_id is None:
                 send(conn, {
                     "status": "no_work",

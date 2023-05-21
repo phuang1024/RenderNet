@@ -57,8 +57,8 @@ class DataManager:
                 - "done": List of frames done.
                 - "pending": Map of frames being processed to time started.
                 - "todo": List of frames not started.
-                - "speed": Map of worker IP to speed (sec / frame). Stored as `VarStat` object.
-                - "batch_size": Map of worker IP to batch_size. With each batch, this is changed
+                - "speed": Map of worker ID to speed (sec / frame). Stored as `VarStat` object.
+                - "batch_size": Map of worker ID to batch_size. With each batch, this is changed
                     to make work time closer to `max_batch_time`.
             - done.txt   # if present, means done.
             - lock.txt   # if present, some thread is processing.
@@ -118,7 +118,7 @@ class DataManager:
 
         return job_id
 
-    def get_work(self):
+    def get_work(self, worker_id):
         """
         Randomly chooses pending job to do.
         :return: (job_id, frame)
@@ -131,13 +131,20 @@ class DataManager:
         job_path = self.root / job_id
 
         with self.lock(job_id):
+            status = pickle.loads((job_path / "status.pkl").read_bytes())
+
+            # Make speed map, if not present.
+            if worker_id not in status["speed"]:
+                status["speed"][worker_id] = VarStat()
+                status["batch_size"][worker_id] = 1
+
             # Update frames
-            data = pickle.loads((job_path / "status.pkl").read_bytes())
-            frames = data["todo"][:self.chunk_size]
+            frames = status["todo"][:status["batch_size"][worker_id]]
             for frame in frames:
-                data["todo"].remove(frame)
-                data["pending"][frame] = time.time()
-            (job_path / "status.pkl").write_bytes(pickle.dumps(data))
+                status["todo"].remove(frame)
+                status["pending"][frame] = time.time()
+
+            (job_path / "status.pkl").write_bytes(pickle.dumps(status))
 
         return (job_id, frames)
 

@@ -47,13 +47,13 @@ def run_blender_render(file, frames):
     assert proc.returncode == 0, "Blender failed to render."
 
 
-def attempt_render(config) -> bool:
+def attempt_render(config, worker_id) -> bool:
     """
     Attempt to render a job.
     :return: True if a job was rendered, False otherwise.
     """
     # Request work
-    resp = make_request(config, {"method": "get_work"})
+    resp = make_request(config, {"method": "get_work", "worker_id": worker_id})
     if resp["status"] != "ok":
         #print("No work.")
         return False
@@ -70,7 +70,7 @@ def attempt_render(config) -> bool:
     for frame in frames:
         curr_path = TMP_DIR / "renders" / f"img{frame:04d}.jpg"
         resp = make_request(config, {"method": "upload_render", "job_id": job_id, "frame": frame,
-                "data": curr_path.read_bytes()})
+                "data": curr_path.read_bytes(), "worker_id": worker_id})
 
     print("  Done.")
     return True
@@ -83,14 +83,15 @@ def run_worker(config):
     """
     print("Worker starting.")
     print(f"Temporary directory: {TMP_DIR}")
-    print("Testing ping...")
-    resp = make_request(config, {"method": "ping"})
-    assert resp["status"] == "ok"
+    print("Initializing worker...")
+    resp = make_request(config, {"method": "worker_init"})
+    worker_id = resp["worker_id"]
+    print(f"Worker ID is {worker_id}")
     print("Waiting for work")
 
     delay = 0
     while not interrupted():
-        did_work = attempt_render(config)
+        did_work = attempt_render(config, worker_id)
         if did_work:
             delay = 0
         else:
