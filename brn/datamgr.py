@@ -141,6 +141,10 @@ class DataManager:
         with self.lock(job_id):
             status = pickle.loads((job_path / "status.pkl").read_bytes())
 
+            # WORKAROUND: Currently, worker uploads batch one frame at a time.
+            # If we update `batch_size` every frame, it will be updated as many
+            # times as there are frames in the batch.
+            # Instead, the timeout ensures each batch only creates one update.
             time_since_update = time.time() - status["last_batch_update"][worker_id]
             if time_since_update > 10:
                 avg_time = (time.time() - status["pending"][frame]) / status["batch_size"][worker_id]
