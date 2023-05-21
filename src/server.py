@@ -135,7 +135,7 @@ class Server:
             })
 
         elif request["method"] == "job_status":
-            path = self.manager.root / request["job_id"] / "frames.pkl"
+            path = self.manager.root / request["job_id"] / "status.pkl"
             if path.exists():
                 data = pickle.loads(path.read_bytes())
                 all_frames = sorted(set(data["done"] + list(data["pending"].keys()) + data["todo"]))
@@ -155,9 +155,27 @@ class Server:
             send(conn, {"status": "invalid_request"})
 
 
+class VarStat:
+    """
+    One variable statistics.
+    """
+
+    def __init__(self):
+        self.sum = 0
+        self.count = 0
+
+    def add(self, n):
+        self.sum += n
+        self.count += 1
+
+    def average(self):
+        return self.sum / self.count
+
+
 class DataManager:
     """
     Manages current jobs in temporary directory.
+    Used by server.
 
     File structure:
     - DataManager root
@@ -166,17 +184,25 @@ class DataManager:
             - blend.tar.gz    # contains user's blend, textures, etc.
                 - main.blend  # blend file to render.
                 ...
-            - frames.pkl
+            - status.pkl  # dictionary containing:
+                - "done": List of frames done.
+                - "pending": Map of frames being processed to time started.
+                - "todo": List of frames not started.
+                - "speed": Map of worker IP to speed (sec / frame). Stored as `VarStat` object.
+                - "batch_size": Map of worker IP to batch_size. With each batch, this is changed
+                    to make work time closer to `max_batch_time`.
             - done.txt   # if present, means done.
-            - lock.txt   # if present, thread is processing.
+            - lock.txt   # if present, some thread is processing.
             - renders/   # rendered images
                 - 0.jpg
                 ...
         ...
     """
 
-    # Worker renders x frames per request.
-    chunk_size = 8
+    # Ideal max time a worker works for per batch (sec).
+    # Smaller = less waiting on slower workers at the end.
+    # Larger = less relative overhead.
+    max_batch_time = 20
 
     def __init__(self, root):
         self.root = root
@@ -207,8 +233,10 @@ class DataManager:
             "done": [],
             "pending": {},   # {frame: time_start, ...}
             "todo": sorted(list(frames)),
+            "speed": {},
+            "batch_size": {},
         }
-        (path / "frames.pkl").write_bytes(pickle.dumps(data))
+        (path / "status.pkl").write_bytes(pickle.dumps(data))
 
         # Output renders directory.
         (path / "renders").mkdir()
@@ -233,12 +261,12 @@ class DataManager:
         (path / "lock.txt").touch()
 
         # Update frames
-        data = pickle.loads((path / "frames.pkl").read_bytes())
+        data = pickle.loads((path / "status.pkl").read_bytes())
         frames = data["todo"][:self.chunk_size]
         for frame in frames:
             data["todo"].remove(frame)
             data["pending"][frame] = time.time()
-        (path / "frames.pkl").write_bytes(pickle.dumps(data))
+        (path / "status.pkl").write_bytes(pickle.dumps(data))
 
         (path / "lock.txt").unlink()
         return (job_id, frames)
@@ -247,10 +275,10 @@ class DataManager:
         path = self.root / job_id
 
         # Update frames
-        data = pickle.loads((path / "frames.pkl").read_bytes())
+        data = pickle.loads((path / "status.pkl").read_bytes())
         data["pending"].pop(frame)
         data["done"].append(frame)
-        (path / "frames.pkl").write_bytes(pickle.dumps(data))
+        (path / "status.pkl").write_bytes(pickle.dumps(data))
 
         # Save image
         (path / "renders" / f"{frame}.jpg").write_bytes(img_data)
@@ -270,7 +298,7 @@ class DataManager:
         for jobdir in self.root.iterdir():
             done_txt = (jobdir / "done.txt")
             if not done_txt.exists():
-                frames = pickle.loads((jobdir / "frames.pkl").read_bytes())
+                frames = pickle.loads((jobdir / "status.pkl").read_bytes())
                 if len(frames["todo"]) > 0:
                     yield jobdir.name
                 else:
