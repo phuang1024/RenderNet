@@ -6,23 +6,6 @@ import time
 from pathlib import Path
 
 
-class VarStat:
-    """
-    One variable statistics.
-    """
-
-    def __init__(self):
-        self.sum = 0
-        self.count = 0
-
-    def add(self, n):
-        self.sum += n
-        self.count += 1
-
-    def average(self):
-        return self.sum / self.count
-
-
 class FileLock:
     """
     If file is present, means something is locked.
@@ -57,9 +40,8 @@ class DataManager:
                 - "done": List of frames done.
                 - "pending": Map of frames being processed to time started.
                 - "todo": List of frames not started.
-                - "speed": Map of worker ID to speed (sec / frame). Stored as `VarStat` object.
                 - "batch_size": Map of worker ID to batch_size. With each batch, this is changed
-                    to make work time closer to `max_batch_time`.
+                    to make work time closer to `tgt_batch_time`.
             - done.txt   # if present, means no more "todo" frames.
             - lock.txt   # if present, some thread is processing.
             - renders/   # rendered images
@@ -71,7 +53,7 @@ class DataManager:
     # Ideal max time a worker works for per batch (sec).
     # Smaller = less waiting on slower workers at the end.
     # Larger = less relative overhead.
-    max_batch_time = 20
+    tgt_batch_time = 40
     max_batch_size = 100
 
     def __init__(self, root):
@@ -109,7 +91,6 @@ class DataManager:
             "done": [],
             "pending": {},   # {frame: time_start, ...}
             "todo": sorted(list(frames)),
-            "speed": {},
             "batch_size": {},
         }
         (job_path / "status.pkl").write_bytes(pickle.dumps(data))
@@ -134,13 +115,12 @@ class DataManager:
         with self.lock(job_id):
             status = pickle.loads((job_path / "status.pkl").read_bytes())
 
-            # Make speed map, if not present.
-            if worker_id not in status["speed"]:
-                status["speed"][worker_id] = VarStat()
+            if worker_id not in status["batch_size"]:
+                # Initialize worker batch_size
                 status["batch_size"][worker_id] = 1
 
             # Update frames
-            frames = status["todo"][:status["batch_size"][worker_id]]
+            frames = status["todo"][:int(status["batch_size"][worker_id])]
             for frame in frames:
                 status["todo"].remove(frame)
                 status["pending"][frame] = time.time()
@@ -155,16 +135,11 @@ class DataManager:
         with self.lock(job_id):
             status = pickle.loads((job_path / "status.pkl").read_bytes())
 
-            # Update speed
-            elapse = time.time() - status["pending"][frame]
-            status["speed"][worker_id].add(elapse / status["batch_size"][worker_id])
-
-            # Update batch size
-            avg_time = status["speed"][worker_id].average()
-            nominal_bs = self.max_batch_time / avg_time
+            avg_time = (time.time() - status["pending"][frame]) / status["batch_size"][worker_id]
+            nominal_bs = self.tgt_batch_time / avg_time
             diff = nominal_bs - status["batch_size"][worker_id]
             new_bs = status["batch_size"][worker_id] + diff*0.5
-            new_bs = max(1, min(self.max_batch_size, int(new_bs)))
+            new_bs = max(1, min(self.max_batch_size, new_bs))
             status["batch_size"][worker_id] = new_bs
 
             # Update frames
