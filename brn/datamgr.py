@@ -45,6 +45,8 @@ class DataManager:
                     to make work time closer to `tgt_batch_time`.
                 - "last_batch_update": Map of ID to last time batch_size was updated. Prevent
                     changing batch_size too often.
+                - "last_status_update": Map of frame to when worker pinged server. If worker
+                    doesn't ping for too long, remove frame from "pending" and add to "todo".
             - done.txt   # if present, means no more "todo" frames.
             - lock.txt   # if present, some thread is processing.
             - renders/   # rendered images
@@ -58,6 +60,7 @@ class DataManager:
     # Larger = less relative overhead.
     tgt_batch_time = 40
     max_batch_size = 100
+    status_update_timeout = 20
 
     def __init__(self, root):
         self.root = root
@@ -96,7 +99,8 @@ class DataManager:
                 "pending": {},   # {frame: time_start, ...}
                 "todo": sorted(list(frames)),
                 "batch_size": {},
-                "last_batch_update": {}
+                "last_batch_update": {},
+                "last_status_update": {},
             }
             (job_path / "status.pkl").write_bytes(pickle.dumps(data))
 
@@ -125,11 +129,20 @@ class DataManager:
                 status["batch_size"][worker_id] = 1
                 status["last_batch_update"][worker_id] = time.time()
 
+            # Check last_status_update timeout
+            for frame in list(status["last_status_update"].keys()):
+                if time.time() - status["last_status_update"][frame] > self.status_update_timeout:
+                    status["pending"].pop(frame)
+                    status["last_status_update"].pop(frame)
+                    status["todo"].append(frame)
+                    print(f"Status update timeout: JobID={job_id}, Frame={frame}")
+
             # Update frames
             frames = status["todo"][:int(status["batch_size"][worker_id])]
             for frame in frames:
                 status["todo"].remove(frame)
                 status["pending"][frame] = time.time()
+                status["last_status_update"][frame] = time.time()
 
             (job_path / "status.pkl").write_bytes(pickle.dumps(status))
 
@@ -158,10 +171,22 @@ class DataManager:
 
             # Update frames
             status["pending"].pop(frame)
+            status["last_status_update"].pop(frame)
             status["done"].append(frame)
 
             # Save image
             (job_path / "renders" / f"{frame}.jpg").write_bytes(img_data)
+
+            (job_path / "status.pkl").write_bytes(pickle.dumps(status))
+
+    def status_update(self, job_id, frames):
+        job_path = self.root / job_id
+
+        with self.lock(job_id):
+            status = pickle.loads((job_path / "status.pkl").read_bytes())
+
+            for frame in frames:
+                status["last_status_update"][frame] = time.time()
 
             (job_path / "status.pkl").write_bytes(pickle.dumps(status))
 

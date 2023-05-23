@@ -55,7 +55,7 @@ def create_job(config, args):
 
     job_id = response["job_id"]
     print(f"Job created: job_id={job_id}")
-    print(f"Run `python main.py download {job_id} /path/to/output` to download the results.")
+    print(f"Run `brn download {job_id} /path/to/output` to download the results.")
 
 
 def download_results(config, args):

@@ -4,7 +4,7 @@ import tarfile
 import tempfile
 import time
 from pathlib import Path
-from subprocess import run, DEVNULL
+from subprocess import Popen, DEVNULL
 
 from .conn import make_request
 from .interrupt import interrupted
@@ -34,16 +34,24 @@ def ensure_blend(config, job_id):
     return path / "main.blend"
 
 
-def run_blender_render(file, frames):
+def run_blender_render(config, job_id, file, frames):
     print(f"  Running blender on {len(frames)} frames...")
     out_path = TMP_DIR / "renders" / "img"
 
-    proc = run(
+    proc = Popen(
         [BLENDER, "-b", file, "-F", "JPEG", "-o", out_path, "-f", ",".join(map(str, frames))],
         stdout=DEVNULL,
         stderr=DEVNULL,
         cwd=file.parent,
     )
+
+    last_status_update = time.time()
+    while proc.poll() is None:
+        time.sleep(0.1)
+        if time.time() - last_status_update > 5:
+            make_request(config, {"method": "status_update", "job_id": job_id, "frames": frames})
+            last_status_update = time.time()
+
     assert proc.returncode == 0, "Blender failed to render."
 
 
@@ -65,7 +73,7 @@ def attempt_render(config, worker_id) -> bool:
 
     # Render
     blend_path = ensure_blend(config, job_id)
-    run_blender_render(blend_path, frames)
+    run_blender_render(config, job_id, blend_path, frames)
 
     # Upload result
     print("  Uploading results...")

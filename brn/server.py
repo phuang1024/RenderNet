@@ -40,6 +40,9 @@ class Server:
     - "job_status":
         - request: {job_id=...}
         - response: {frames_done=..., frames_requested=...}
+    - "status_update":
+        - request: {job_id=..., frames=[...]}
+        - response: {status: "ok"}
     """
 
     def __init__(self, ip, port):
@@ -152,6 +155,10 @@ class Server:
                     "status": "not_found"
                 }
             send(conn, response)
+
+        elif request["method"] == "status_update":
+            self.manager.status_update(request["job_id"], request["frames"])
+            send(conn, {"status": "ok"})
 
         else:
             print(f"Invalid method from {addr}")
